@@ -14,7 +14,8 @@ cols = 9
 # Set the termination criteria for the corner sub-pixel algorithm
 criteria = (cv2.TERM_CRITERIA_MAX_ITER + cv2.TERM_CRITERIA_EPS, 30, 0.001)
 
-# Prepare the object points: (0,0,0), (1,0,0), (2,0,0), ..., (6,5,0). They are the same for all images
+# Prepare the object points: (0,0,0), (1,0,0), (2,0,0), ..., (6,5,0).
+#  They are the same for all images
 objectPoints = np.zeros((rows * cols, 3), np.float32)
 objectPoints[:, :2] = np.mgrid[0:rows, 0:cols].T.reshape(-1, 2)
 
@@ -24,7 +25,7 @@ imgPointsArray = []
 
 # Loop over the image files
 # for path in glob.glob("../data/left[0-1][0-9].jpg"):
-for path in glob.glob("images/*.jpg"):
+for path in glob.glob("../images/*.jpg"):
     # Load the image and convert it to gray scale
     img = cv2.imread(path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -74,8 +75,8 @@ newCameraMtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w, h), 1, (w, h))
 undistortedImg = cv2.undistort(img, mtx, dist, None, newCameraMtx)
 
 # Crop the undistorted image
-# x, y, w, h = roi
-# undistortedImg = undistortedImg[y:y + h, x:x + w]
+x, y, w, h = roi
+undistortedImg = undistortedImg[y : y + h, x : x + w]
 
 # Display the final result
 cv2.imshow("chess board", np.hstack((img, undistortedImg)))
