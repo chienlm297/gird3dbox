@@ -129,4 +129,4 @@ dmypy.json
 .pyre/
 
 test/
-save_image/*
+save_image/*.png
