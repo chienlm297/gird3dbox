@@ -11,11 +11,16 @@ def random_color():
     return (rd.randint(0, 255), rd.randint(0, 255), rd.randint(0, 255))
 
 
+def fill_box(img, pt1, pt2, pt3, pt4, color):
+    img = cv2.drawContours(img, [np.array([pt2, pt1, pt3, pt4])], -2, color, -3)
+    return img
+
+
 def color_each_floor(index):
     pass
 
 
-def draw_cube(img, imgpts, color):
+def draw_cube(img, imgpts, color, draw: bool):
     imgpts = np.int32(imgpts).reshape(-1, 2)
 
     # draw ground floor in green
@@ -24,9 +29,18 @@ def draw_cube(img, imgpts, color):
     # draw pillars in blue color
     for i, j in zip(range(4), range(4, 8)):
         img = cv2.line(img, tuple(imgpts[i]), tuple(imgpts[j]), color, 1)
+        pt1 = imgpts[i]
+        pt2 = imgpts[j]
+        pt3 = imgpts[i + 1] if i < 3 else imgpts[0]
+        pt4 = imgpts[j + 1] if j < 7 else imgpts[4]
+        if draw:
+            img = cv2.drawContours(img, [imgpts[:4]], -1, color, -3)
+            img = fill_box(img, pt1, pt2, pt3, pt4, color)
+            img = cv2.drawContours(img, [imgpts[4:]], -1, color, -3)
 
-    # draw top layer in red color
+    # # draw top layer in red color
     img = cv2.drawContours(img, [imgpts[4:]], -1, color, 1)
+    img = cv2.drawContours(img, [imgpts[:4]], -1, color, 1)
 
     return img
 
@@ -77,7 +91,7 @@ print(box_point[1])
 # loop over the image files
 index = 0
 # for path in glob.glob("../data/left[0-1][0-9].jpg"):
-for path in glob.glob("images/*.jpg"):
+for path in glob.glob("../images/*.jpg"):
     index += 1
     # load the image and convert it to gray scale
     img = cv2.imread(path)
@@ -94,6 +108,8 @@ for path in glob.glob("images/*.jpg"):
         val, rvecs, tvecs, inliers = cv2.solvePnPRansac(
             objectPoints, corners, mtx, dist
         )
+        white_img = np.zeros(img.shape, dtype=np.uint8)
+        white_img.fill(255)
         for z in range(heights):
             color = COLOR[z % heights - 1]
             for x in range(rows):
@@ -107,14 +123,15 @@ for path in glob.glob("images/*.jpg"):
 
                     # draw the axis lines
                     # Draw the axis lines
+                    draw = (x + y) == 5 if z == 1 else 0
                     corners = corners.astype("int")
                     axisImgPoints = axisImgPoints.astype("int")
-                    img = draw_cube(img, axisImgPoints, color)
+                    white_img = draw_cube(white_img, axisImgPoints, color, draw)
 
-        cv2.imwrite("save_image/{}.png".format(index), img)
+        cv2.imwrite("save_image/{}.png".format(index), white_img)
 
     # Display the image
-    cv2.imshow("chess board", img)
-    cv2.waitKey(700)
+    cv2.imshow("chess board", white_img)
+    cv2.waitKey(0)
 
 cv2.destroyAllWindows()
