@@ -1,10 +1,11 @@
-import cv2
-import numpy as np
 import glob
+import json
 import random as rd
 
+import cv2
+import numpy as np
 
-COLOR = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
+COLOR = [(0, 255, 0), (0, 255, 0), (0, 255, 0)]
 
 
 def random_color():
@@ -21,28 +22,34 @@ def color_each_floor(index):
 
 
 def draw_cube(img, imgpts, color, draw: bool):
+    num_box_fill = 0
+    if draw:
+        num_box_fill = 1
     imgpts = np.int32(imgpts).reshape(-1, 2)
 
     # draw ground floor in green
     # img = cv2.drawContours(img, [imgpts[:4]], -1, random_color(), -3)
 
-    # draw pillars in blue color
     for i, j in zip(range(4), range(4, 8)):
-        img = cv2.line(img, tuple(imgpts[i]), tuple(imgpts[j]), color, 1)
         pt1 = imgpts[i]
         pt2 = imgpts[j]
         pt3 = imgpts[i + 1] if i < 3 else imgpts[0]
         pt4 = imgpts[j + 1] if j < 7 else imgpts[4]
+
         if draw:
-            img = cv2.drawContours(img, [imgpts[:4]], -1, color, -3)
-            img = fill_box(img, pt1, pt2, pt3, pt4, color)
-            img = cv2.drawContours(img, [imgpts[4:]], -1, color, -3)
+            img = cv2.drawContours(img, [imgpts[:4]], -1, (0, 0, 255), -3)
+            img = fill_box(img, pt1, pt2, pt3, pt4, (0, 0, 255))
+            img = cv2.drawContours(img, [imgpts[4:]], -1, (0, 0, 255), -3)
+
+    # draw pillars in blue color
+    for i, j in zip(range(4), range(4, 8)):
+        img = cv2.line(img, tuple(imgpts[i]), tuple(imgpts[j]), color, 1)
 
     # # draw top layer in red color
     img = cv2.drawContours(img, [imgpts[4:]], -1, color, 1)
     img = cv2.drawContours(img, [imgpts[:4]], -1, color, 1)
 
-    return img
+    return img, num_box_fill
 
 
 def make_aixsPoints(x: int, y: int, z: int):
@@ -62,14 +69,13 @@ def make_aixsPoints(x: int, y: int, z: int):
 
 # Load the camera calibration data
 
-with np.load("../data/calib.npz") as calibData:
+with np.load("Images/Chessboard_9x18/calib.npz") as calibData:
     mtx, dist, rvecs, tvecs = [calibData[i] for i in ("mtx", "dist", "rvecs", "tvecs")]
 
-# define the chess board rows and columns
-
-rows = 6
-cols = 9
-heights = 3
+# Define the chess board rows and columns
+rows = 8
+cols = 17
+heights = 2
 
 # set the termination criteria for the corner sub-pixel algorithm
 criteria = (cv2.TERM_CRITERIA_MAX_ITER + cv2.TERM_CRITERIA_EPS, 30, 0.001)
@@ -85,22 +91,25 @@ box_point = (
     .T.reshape(-1, rows * heights, 3)
     .astype("float32")
 )
-print(box_point.shape)
-print(box_point[1])
-
+# label_file = open("label.csv", mode="w")
+# label_writer = csv.writer(
+#     label_file, delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL
+# )
+jsonFile = open("dataview/Labels.json", "w")
 # loop over the image files
-index = 0
-# for path in glob.glob("../data/left[0-1][0-9].jpg"):
-for path in glob.glob("../images/*.jpg"):
-    index += 1
+
+image_idx = 0
+for path in glob.glob("fix2view/*.jpg"):
+    index = 0
     # load the image and convert it to gray scale
     img = cv2.imread(path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     # find the chess board corners
     ret, corners = cv2.findChessboardCorners(gray, (rows, cols), None)
-
+    # print(corners)
     if ret:
+        print(path)
         # refine the corner position
         corners = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
 
@@ -110,28 +119,51 @@ for path in glob.glob("../images/*.jpg"):
         )
         white_img = np.zeros(img.shape, dtype=np.uint8)
         white_img.fill(255)
-        for z in range(heights):
-            color = COLOR[z % heights - 1]
-            for x in range(rows):
-                for y in range(cols):
-                    axisPoints = make_aixsPoints(x, y, z)
+        x_coords = []
+        y_coords = []
+        num_box_fill = 0
+        for x_ in range(0, rows):
+            x_coords.append(x_)
+            y_coords = []
+            for y_ in range(0, cols):
+                y_coords.append(y_)
+                for z in range(heights):
+                    color = COLOR[z % heights - 1]
+                    for x in range(0, rows, 1):
+                        for y in range(0, cols, 1):
+                            axisPoints = make_aixsPoints(x, y, z)
 
-                    # Project the 3D axis points to the image plane
-                    axisImgPoints, jac = cv2.projectPoints(
-                        axisPoints, rvecs, tvecs, mtx, dist
-                    )
+                            # Project the 3D axis points to the image plane
+                            axisImgPoints, jac = cv2.projectPoints(
+                                axisPoints, rvecs, tvecs, mtx, dist
+                            )
 
-                    # draw the axis lines
-                    # Draw the axis lines
-                    draw = (x + y) == 5 if z == 1 else 0
-                    corners = corners.astype("int")
-                    axisImgPoints = axisImgPoints.astype("int")
-                    white_img = draw_cube(white_img, axisImgPoints, color, draw)
+                            # Draw the axis lines
+                            draw = (x in x_coords and y in y_coords) if z == 0 else 0
 
-        cv2.imwrite("save_image/{}.png".format(index), white_img)
-
-    # Display the image
-    cv2.imshow("chess board", white_img)
-    cv2.waitKey(0)
-
-cv2.destroyAllWindows()
+                            corners = corners.astype("int")
+                            axisImgPoints = axisImgPoints.astype("int")
+                            # img = draw_cube(img, axisImgPoints, color, draw)
+                            white_img, _num = draw_cube(
+                                white_img, axisImgPoints, color, draw
+                            )
+                            # if _num == 1 :
+                            #     print(_num)
+                            num_box_fill += _num
+                if image_idx == 0:
+                    one_hot_label = [0] * (rows * cols)
+                    one_hot_label[: index + 1] = [1] * (index + 1)
+                    cv2.imwrite("dataview/view1/{}.png".format(index), white_img)
+                    dataDict = {
+                        "image_name": "{}.png".format(index),
+                        # "x_range": x_coords,
+                        # "y_range": y_coords,
+                        "label": one_hot_label
+                    }
+                    dataDict = json.dumps(dataDict)
+                    jsonFile.write(dataDict + "\n")
+                    index += 1
+                else:
+                    cv2.imwrite("dataview/view2/{}.png".format(index), white_img)
+                    index += 1
+    image_idx += 1
